@@ -1,0 +1,5 @@
+{
+  "name": "ARC-DRX Dispute Resolver",
+  "description": "Autonomous Customer Dispute Resolution Agent utilizing Supabase data validation and Mistral AI logic for automated claim processing.",
+  "requestFramePermissions": []
+}
