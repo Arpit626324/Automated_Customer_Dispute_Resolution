@@ -124,13 +124,18 @@ const hydrateClaimsWithOrderData = async (claims: ClaimRecord[]): Promise<ClaimR
   try {
       const { data: orders, error } = await supabase
           .from('order_master')
-          .select(`order_id, total_amount, order_items (product_name, quantity, price_per_unit)`)
+          .select(`order_id, total_amount, delivery_date, order_items (product_name, quantity, price_per_unit)`)
           .in('order_id', orderIds);
       if (error || !orders) return claims;
       return claims.map(claim => {
           const order = orders.find(o => o.order_id === claim.order_id);
           const itemsStr = order?.order_items?.map((i: any) => `${i.quantity}x ${i.product_name}`).join(', ') || '';
-          return { ...claim, order_amount: order?.total_amount, items_detail: itemsStr };
+          return { 
+            ...claim, 
+            order_amount: order?.total_amount, 
+            items_detail: itemsStr,
+            order_date: order?.delivery_date 
+          };
       });
   } catch (e) {
       return claims;

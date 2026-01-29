@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { ClaimRecord, ClaimStatus } from '../types';
 import { getUserClaims, userRespondToOffer } from '../services/mockBackend';
-import { Clock, CheckCircle, XCircle, AlertTriangle, ArrowRight, XCircle as XCircleIcon, Package, UserCheck, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertTriangle, ArrowRight, XCircle as XCircleIcon, Package, UserCheck, ThumbsUp, ThumbsDown, Calendar } from 'lucide-react';
 
 export const UserHistory: React.FC = () => {
   const [claims, setClaims] = useState<ClaimRecord[]>([]);
@@ -78,6 +78,14 @@ export const UserHistory: React.FC = () => {
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -103,6 +111,7 @@ export const UserHistory: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
                   <th className="px-6 py-4 font-semibold w-24">Order</th>
+                  <th className="px-6 py-4 font-semibold">Claim Date</th>
                   <th className="px-6 py-4 font-semibold">Items</th>
                   <th className="px-6 py-4 font-semibold w-24">Order Amt</th>
                   <th className="px-6 py-4 font-semibold w-24">Refund</th>
@@ -117,6 +126,12 @@ export const UserHistory: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="text-slate-900 font-medium">#{claim.order_id}</div>
                       <div className="text-xs text-slate-400 font-mono">{String(claim.claim_id).substring(0,6)}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-slate-600 flex items-center gap-1.5">
+                        <Calendar size={14} className="text-slate-400" />
+                        {formatDate(claim.created_at)}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-start gap-2 max-w-[200px]">
@@ -182,7 +197,7 @@ export const UserHistory: React.FC = () => {
               
               {/* ACTION REQUIRED BANNER */}
               {selectedClaim.status === ClaimStatus.WAITING_USER_ACTION && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-pulse-slow">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                    <h4 className="text-blue-800 font-bold flex items-center gap-2 mb-2">
                      <UserCheck size={20} /> Action Required
                    </h4>
@@ -212,6 +227,14 @@ export const UserHistory: React.FC = () => {
                  <div>
                     <span className="block text-xs font-bold text-slate-400 uppercase mb-1">Order ID</span>
                     <span className="font-semibold text-slate-900 text-lg">#{selectedClaim.order_id}</span>
+                 </div>
+                 <div>
+                    <span className="block text-xs font-bold text-slate-400 uppercase mb-1">Claim Date</span>
+                    <span className="text-slate-700 font-medium">{formatDate(selectedClaim.created_at)}</span>
+                 </div>
+                 <div>
+                    <span className="block text-xs font-bold text-slate-400 uppercase mb-1">Order Date</span>
+                    <span className="text-slate-700 font-medium">{selectedClaim.order_date || 'N/A'}</span>
                  </div>
                  <div>
                     <span className="block text-xs font-bold text-slate-400 uppercase mb-1">Order Amount</span>

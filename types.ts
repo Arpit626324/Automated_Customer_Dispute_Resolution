@@ -57,6 +57,7 @@ export interface ClaimRecord {
   // New fields for detailed history
   order_amount?: number;
   items_detail?: string;
+  order_date?: string;
 }
 
 export interface ValidationPayload {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, CheckCircle, Clock, FileText, ArrowUpRight, Search, XCircle, Check, X, Package, DollarSign, Edit, Send, UserCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, FileText, ArrowUpRight, Search, XCircle, Check, X, Package, DollarSign, Edit, Send, UserCheck, Calendar } from 'lucide-react';
 import { getClaims, updateClaimStatus } from '../services/mockBackend';
 import { ClaimRecord, ClaimStatus, ResolutionType } from '../types';
 
@@ -169,6 +169,14 @@ export const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -253,6 +261,7 @@ export const AdminDashboard: React.FC = () => {
               <thead>
                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold border-b border-slate-200">
                    <th className="px-6 py-4">Claim ID</th>
+                   <th className="px-6 py-4">Claim Date</th>
                    <th className="px-6 py-4">Details</th>
                    <th className="px-6 py-4">Items</th>
                    <th className="px-6 py-4">Status</th>
@@ -265,7 +274,7 @@ export const AdminDashboard: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredList.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
                       No records found.
                     </td>
                   </tr>
@@ -273,6 +282,12 @@ export const AdminDashboard: React.FC = () => {
                   <tr key={claim.claim_id} className="hover:bg-slate-50 group text-sm transition-colors">
                     <td className="px-6 py-4 font-mono text-slate-500 text-xs">
                       {String(claim.claim_id).substring(0, 8)}...
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-xs text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
+                        <Calendar size={12} className="text-slate-400" />
+                        {formatDate(claim.created_at)}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-bold text-slate-800">Ord #{claim.order_id}</div>
@@ -385,6 +400,14 @@ export const AdminDashboard: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Order</h4>
                   <p className="text-slate-900 font-medium">#{selectedClaim.order_id}</p>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Claim Date</h4>
+                  <p className="text-slate-700 font-medium">{formatDate(selectedClaim.created_at)}</p>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Order Date</h4>
+                  <p className="text-slate-700 font-medium">{selectedClaim.order_date || 'N/A'}</p>
                 </div>
                 <div>
                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Items</h4>

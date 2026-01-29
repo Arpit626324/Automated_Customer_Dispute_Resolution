@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { UserInput, MistralDecision, ResolutionType } from '../types';
+import { UserInput, MistralDecision, ResolutionType, ValidationPayload } from '../types';
 import { fetchOrderData, callMistralAgent, saveClaim } from '../services/mockBackend';
 import { Button } from './ui/Button';
-import { FileText, AlertCircle, CheckCircle, ShieldAlert, ServerCrash } from 'lucide-react';
+import { FileText, AlertCircle, CheckCircle, ShieldAlert, ServerCrash, Calendar } from 'lucide-react';
 
 export const ClaimForm: React.FC = () => {
   const [formData, setFormData] = useState<UserInput>({
@@ -15,16 +15,19 @@ export const ClaimForm: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<MistralDecision | null>(null);
   const [systemError, setSystemError] = useState<string | null>(null);
+  const [validationData, setValidationData] = useState<ValidationPayload | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setResult(null);
     setSystemError(null);
+    setValidationData(null);
 
     try {
       // 1. Fetch Order Data (Server Side)
       const validationPayload = await fetchOrderData(Number(formData.order_id));
+      setValidationData(validationPayload);
       
       // 2. Call Mistral Agent (Server Side) or Fallback
       const decision = await callMistralAgent(formData, validationPayload);
@@ -147,6 +150,14 @@ export const ClaimForm: React.FC = () => {
               <p className="text-slate-700 mb-4">{result.reason}</p>
               
               <div className="bg-white/60 rounded-lg p-4 text-sm space-y-2 border border-black/5">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold flex items-center gap-2">
+                    <Calendar size={14} className="text-slate-500" /> Order Date:
+                  </span>
+                  <span className="text-slate-900 font-medium">
+                    {validationData?.order_master?.delivery_date || 'N/A'}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="font-semibold">Next Steps:</span>
                   <span>{result.next_steps}</span>
