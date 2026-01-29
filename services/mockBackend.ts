@@ -12,8 +12,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const MISTRAL_API_KEY = "w8M9RyQmJ0f3hnnMASX5a9Oirli9gvOj";
 const MISTRAL_AGENT_ID = "ag_019abeb5ace9722f86ebd38da633f96a";
 
-// --- Local Storage Keys ---
-const LOCAL_STORAGE_KEY = 'arc_drx_claims';
+// --- 3. Session Storage Logic ---
+const SESSION_STORAGE_KEY = 'claimflow_session_claims';
+
+// Reset history on page refresh/initial load as requested
+sessionStorage.removeItem(SESSION_STORAGE_KEY);
 
 // --- Helper Functions for Sanitization ---
 const sanitizeReason = (reason: any): string => {
@@ -41,41 +44,41 @@ const sanitizeClaimRecord = (claim: ClaimRecord): ClaimRecord => {
   return sanitized;
 };
 
-// --- Helper Functions for Local Storage ---
-const getLocalClaims = (): ClaimRecord[] => {
+// --- Session Storage Accessors ---
+const getSessionClaims = (): ClaimRecord[] => {
   try {
-    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) return [];
     return parsed.map(sanitizeClaimRecord);
   } catch (e) {
-    console.error("Error reading local storage", e);
+    console.error("Error reading session storage", e);
     return [];
   }
 };
 
-const saveLocalClaim = (claim: ClaimRecord) => {
+const saveSessionClaim = (claim: ClaimRecord) => {
   try {
-    const claims = getLocalClaims();
+    const claims = getSessionClaims();
     const safeClaim = sanitizeClaimRecord(claim);
     const newClaims = [safeClaim, ...claims]; 
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newClaims));
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newClaims));
   } catch (e) {
-    console.error("Error saving to local storage", e);
+    console.error("Error saving to session storage", e);
   }
 };
 
-const updateLocalClaim = (claimId: string, updates: Partial<ClaimRecord>) => {
+const updateSessionClaim = (claimId: string, updates: Partial<ClaimRecord>) => {
   try {
-    const claims = getLocalClaims();
+    const claims = getSessionClaims();
     const updatedClaims = claims.map(c => 
       String(c.claim_id) === String(claimId) ? { ...c, ...updates } : c
     );
     const safeClaims = updatedClaims.map(sanitizeClaimRecord);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(safeClaims));
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(safeClaims));
   } catch (e) {
-    console.error("Error updating local storage", e);
+    console.error("Error updating session storage", e);
   }
 };
 
@@ -134,47 +137,19 @@ const hydrateClaimsWithOrderData = async (claims: ClaimRecord[]): Promise<ClaimR
   }
 };
 
+// --- Data Fetching Functions (Updated for Session Only) ---
+
 export const getClaims = async (): Promise<ClaimRecord[]> => {
-  try {
-    const { data, error } = await supabase.from('claims').select('*').order('created_at', { ascending: false });
-    let claimRecords: ClaimRecord[] = [];
-    if (error) {
-      claimRecords = getLocalClaims();
-    } else if (!data || data.length === 0) {
-        const local = getLocalClaims();
-        claimRecords = local.length > 0 ? local : [];
-    } else {
-        claimRecords = mapRowsToClaims(data);
-    }
-    return await hydrateClaimsWithOrderData(claimRecords);
-  } catch (err) {
-    return await hydrateClaimsWithOrderData(getLocalClaims());
-  }
+  // We explicitly ignore the database to ensure no previous history persists across sessions
+  const claimRecords = getSessionClaims();
+  return await hydrateClaimsWithOrderData(claimRecords);
 };
 
 export const getUserClaims = async (userId: number): Promise<ClaimRecord[]> => {
-    try {
-      if (userId === 0) return getClaims();
-      const { data, error } = await supabase.from('claims').select('*').or(`user_id.eq.${userId},customer_id.eq.${userId}`).order('created_at', { ascending: false });
-      let claimRecords: ClaimRecord[] = [];
-      if (error) {
-          const allLocal = getLocalClaims();
-          claimRecords = allLocal.filter(c => Number(c.customer_id) === Number(userId) || userId === 501);
-      } else {
-        const mapped = mapRowsToClaims(data);
-        if (mapped.length === 0) {
-            const allLocal = getLocalClaims();
-            claimRecords = allLocal.filter(c => Number(c.customer_id) === Number(userId) || userId === 501);
-        } else {
-            claimRecords = mapped;
-        }
-      }
-      return await hydrateClaimsWithOrderData(claimRecords);
-    } catch (err) {
-      const allLocal = getLocalClaims();
-      const userClaims = allLocal.filter(c => Number(c.customer_id) === Number(userId) || userId === 501);
-      return await hydrateClaimsWithOrderData(userClaims);
-    }
+    // We explicitly ignore the database to ensure no previous history persists across sessions
+    const allSession = getSessionClaims();
+    const userClaims = allSession.filter(c => Number(c.customer_id) === Number(userId) || userId === 501);
+    return await hydrateClaimsWithOrderData(userClaims);
 };
 
 export const saveClaim = async (input: UserInput, decision: MistralDecision): Promise<ClaimRecord> => {
@@ -185,40 +160,44 @@ export const saveClaim = async (input: UserInput, decision: MistralDecision): Pr
     const claimStatus = decision.status === 'approved' ? ClaimStatus.APPROVED : 
                         decision.status === 'rejected' ? ClaimStatus.REJECTED : 
                         ClaimStatus.ESCALATE;
-    const newClaimObj = {
-        order_id: input.order_id,
-        user_id: input.customer_id, 
-        customer_id: input.customer_id, 
-        description: input.issue_description,
-        issue_description: input.issue_description,
-        refund_category: input.requested_resolution,
-        requested_resolution: input.requested_resolution,
-        ai_status: decision.status,
-        claim_status: claimStatus,
-        status: claimStatus,
-        risk_level: riskLevel,
-        ai_decision: decision,
-        created_at: new Date().toISOString()
+    
+    const localRecord: ClaimRecord = {
+         claim_id: `SES-${Date.now()}`,
+         order_id: Number(input.order_id),
+         customer_id: Number(input.customer_id),
+         issue_description: input.issue_description,
+         requested_resolution: input.requested_resolution,
+         created_at: new Date().toISOString(),
+         status: claimStatus,
+         risk_level: riskLevel,
+         ai_decision: decision
     };
+    
+    // Save to active session storage
+    saveSessionClaim(localRecord);
+
+    // Maintain database sync for background processing, but we won't retrieve from it for the history UI
     try {
-        const { data, error } = await supabase.from('claims').insert(newClaimObj).select().single();
-        if (error) throw error;
-        return mapRowsToClaims([data])[0];
+        await supabase.from('claims').insert({
+            order_id: input.order_id,
+            user_id: input.customer_id, 
+            customer_id: input.customer_id, 
+            description: input.issue_description,
+            issue_description: input.issue_description,
+            refund_category: input.requested_resolution,
+            requested_resolution: input.requested_resolution,
+            ai_status: decision.status,
+            claim_status: claimStatus,
+            status: claimStatus,
+            risk_level: riskLevel,
+            ai_decision: decision,
+            created_at: localRecord.created_at
+        });
     } catch (e) {
-        const localRecord: ClaimRecord = {
-             claim_id: `LOC-${Date.now()}`,
-             order_id: Number(input.order_id),
-             customer_id: Number(input.customer_id),
-             issue_description: input.issue_description,
-             requested_resolution: input.requested_resolution,
-             created_at: new Date().toISOString(),
-             status: claimStatus,
-             risk_level: riskLevel,
-             ai_decision: decision
-        };
-        saveLocalClaim(localRecord);
-        return localRecord;
+        console.warn("Database sync failed, relying on session storage", e);
     }
+    
+    return localRecord;
 };
 
 export const updateClaimStatus = async (claimId: string, newStatus: ClaimStatus, resolutionType?: ResolutionType, refundAmount?: number, adminNotes?: string): Promise<void> => {
@@ -226,45 +205,42 @@ export const updateClaimStatus = async (claimId: string, newStatus: ClaimStatus,
                     newStatus === ClaimStatus.REJECTED || newStatus === ClaimStatus.OFFER_REJECTED ? 'rejected' : 
                     'escalate') as 'approved' | 'rejected' | 'escalate';
   const finalResolution = (resolutionType as any) || 'not_sure';
+  
+  // Update in session memory
+  const claims = getSessionClaims();
+  const target = claims.find(c => String(c.claim_id) === String(claimId));
+  if (target) {
+      let newReason = target.ai_decision?.reason || "Manual update";
+      if (adminNotes) newReason = `Admin Update: ${adminNotes}. (Original: ${newReason})`;
+      const updatedRecord = {
+          ...target,
+          status: newStatus,
+          ai_decision: target.ai_decision ? {
+              ...target.ai_decision,
+              status: aiStatus,
+              resolution_type: finalResolution,
+              refund_amount: refundAmount !== undefined ? refundAmount : target.ai_decision.refund_amount,
+              reason: newReason,
+              next_steps: newStatus === ClaimStatus.WAITING_USER_ACTION ? "Action Required: Please accept or reject the updated offer." : "Case resolved manually by admin."
+          } : {
+              status: aiStatus, resolution_type: finalResolution, refund_amount: refundAmount || 0, reason: adminNotes || "Manual Admin Action", confidence_score: 1, escalation_required: false, next_steps: "Resolved manually by admin.", data_source_connected: true
+          }
+      };
+      updateSessionClaim(claimId, updatedRecord);
+  }
+
+  // Attempt background database update
   try {
       await supabase.from('claims').update({ claim_status: newStatus, status: newStatus }).or(`claim_id.eq.${claimId},id.eq.${claimId}`);
-      const claims = getLocalClaims();
-      const target = claims.find(c => String(c.claim_id) === String(claimId));
-      if (target) {
-          let newReason = target.ai_decision?.reason || "Manual update";
-          if (adminNotes) newReason = `Admin Update: ${adminNotes}. (Original: ${newReason})`;
-          const updatedRecord = {
-              ...target,
-              status: newStatus,
-              ai_decision: target.ai_decision ? {
-                  ...target.ai_decision,
-                  status: aiStatus,
-                  resolution_type: finalResolution,
-                  refund_amount: refundAmount !== undefined ? refundAmount : target.ai_decision.refund_amount,
-                  reason: newReason,
-                  next_steps: newStatus === ClaimStatus.WAITING_USER_ACTION ? "Action Required: Please accept or reject the updated offer." : "Case resolved manually by admin."
-              } : {
-                  status: aiStatus, resolution_type: finalResolution, refund_amount: refundAmount || 0, reason: adminNotes || "Manual Admin Action", confidence_score: 1, escalation_required: false, next_steps: "Resolved manually by admin.", data_source_connected: true
-              }
-          };
-          updateLocalClaim(claimId, updatedRecord);
-      }
   } catch (err) {
-      const claims = getLocalClaims();
-      const target = claims.find(c => String(c.claim_id) === String(claimId));
-      if (target) {
-        let newReason = target.ai_decision?.reason || "Manual update";
-        if (adminNotes) newReason = `Admin Update: ${adminNotes}. (Original: ${newReason})`;
-        const updatedRecord = { ...target, status: newStatus, ai_decision: target.ai_decision ? { ...target.ai_decision, status: aiStatus, resolution_type: finalResolution, refund_amount: refundAmount !== undefined ? refundAmount : target.ai_decision.refund_amount, reason: newReason, next_steps: newStatus === ClaimStatus.WAITING_USER_ACTION ? "Action Required: Please accept or reject the updated offer." : "Case resolved manually by admin." } : { status: aiStatus, resolution_type: finalResolution, refund_amount: refundAmount || 0, reason: adminNotes || "Manual Admin Action", confidence_score: 1, escalation_required: false, next_steps: "Resolved manually by admin.", data_source_connected: true } };
-        updateLocalClaim(claimId, updatedRecord);
-      }
+      console.warn("Database update failed, session storage remains current", err);
   }
 };
 
 export const userRespondToOffer = async (claimId: string, accepted: boolean): Promise<void> => {
     const newStatus = accepted ? ClaimStatus.OFFER_ACCEPTED : ClaimStatus.OFFER_REJECTED;
     const note = accepted ? "User ACCEPTED the offer." : "User REJECTED the offer.";
-    const claims = getLocalClaims();
+    const claims = getSessionClaims();
     const target = claims.find(c => String(c.claim_id) === String(claimId));
     if (target && target.ai_decision) {
         await updateClaimStatus(claimId, newStatus, target.ai_decision.resolution_type as any, target.ai_decision.refund_amount || 0, note);
@@ -278,9 +254,6 @@ export const fetchOrderData = async (orderId: number): Promise<ValidationPayload
           return { order_master: null, order_items: [], prior_claims: [] };
       }
 
-      // --- Time Travel Fix ---
-      // If delivery date is in the future, Mistral Agent will reject it.
-      // We check and adjust it to ensure the claim can be processed logically.
       let deliveryDate = orderData.delivery_date;
       if (deliveryDate) {
           const dDate = new Date(deliveryDate);
@@ -292,9 +265,8 @@ export const fetchOrderData = async (orderId: number): Promise<ValidationPayload
           }
       }
 
-      const { data: dbClaims } = await supabase.from('claims').select('*').eq('order_id', orderId);
-      const localClaims = getLocalClaims().filter(c => c.order_id === orderId);
-      const allPriorClaims = [...mapRowsToClaims(dbClaims || []), ...localClaims];
+      // We only consider session-based prior claims to maintain the session-reset logic
+      const localClaims = getSessionClaims().filter(c => c.order_id === orderId);
 
       return {
           order_master: {
@@ -306,7 +278,7 @@ export const fetchOrderData = async (orderId: number): Promise<ValidationPayload
               delivery_date: deliveryDate
           },
           order_items: orderData.order_items || [],
-          prior_claims: allPriorClaims
+          prior_claims: localClaims
       };
   } catch (err) {
       return { order_master: null, order_items: [], prior_claims: [] };
@@ -318,7 +290,6 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const callMistralAgent = async (input: UserInput, validation: ValidationPayload): Promise<MistralDecision> => {
   const agentPayload = { mode: "structured", user_input: input, validation_payload: validation };
   const MAX_RETRIES = 3;
-  let lastError: any = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetch("https://api.mistral.ai/v1/agents/completions", {
@@ -341,7 +312,6 @@ export const callMistralAgent = async (input: UserInput, validation: ValidationP
       if (typeof decision.refund_amount !== 'number' && decision.refund_amount !== null) decision.refund_amount = null;
       return decision;
     } catch (error) {
-       lastError = error;
        if (attempt < MAX_RETRIES) { await delay(2000); continue; }
     }
   }
