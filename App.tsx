@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { LayoutDashboard, MessageSquareText, FilePenLine, ShieldCheck, History, LogOut, Lock, User } from 'lucide-react';
@@ -18,7 +19,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (role: UserRole) => void }) => {
            <div className="mx-auto w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
              <ShieldCheck size={32} />
            </div>
-           <h1 className="text-2xl font-bold text-slate-900">ARC-DRX</h1>
+           <h1 className="text-2xl font-bold text-slate-900">ClaimFlowAi</h1>
            <p className="text-slate-500">Autonomous Dispute Resolution</p>
         </div>
         <div className="p-8 space-y-4">
@@ -73,7 +74,7 @@ const Sidebar = ({ role, onLogout }: { role: 'user' | 'admin', onLogout: () => v
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
           <ShieldCheck className="text-blue-500" />
-          ARC-DRX
+          ClaimFlowAi
         </h1>
         <p className="text-xs text-slate-500 mt-1 capitalize">{role} Portal</p>
       </div>
@@ -150,7 +151,7 @@ export default function App() {
            <div className="md:hidden mb-6 flex items-center justify-between">
              <div className="flex items-center gap-2 text-slate-900 font-bold text-xl">
                <ShieldCheck className="text-blue-600" />
-               ARC-DRX
+               ClaimFlowAi
              </div>
              <button onClick={() => setRole(null)} className="text-slate-500"><LogOut size={20}/></button>
            </div>

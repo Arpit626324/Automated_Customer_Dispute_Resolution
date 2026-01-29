@@ -15,7 +15,8 @@ export const AdminDashboard: React.FC = () => {
   // Manual Resolution State
   const [isEditing, setIsEditing] = useState(false);
   const [manualResolution, setManualResolution] = useState<ResolutionType>(ResolutionType.FULL_REFUND);
-  const [manualRefundAmount, setManualRefundAmount] = useState<number>(0);
+  // Allow empty string for "Partial Refund" blank box requirement
+  const [manualRefundAmount, setManualRefundAmount] = useState<number | ''>(0);
   const [adminNotes, setAdminNotes] = useState('');
 
   const loadData = async () => {
@@ -58,13 +59,25 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [selectedClaim]);
 
-  // Update amount when resolution type changes (smart defaults)
+  // AUTOMATED REFUND AMOUNT LOGIC based on Resolution Type
   useEffect(() => {
     if (selectedClaim && isEditing) {
-      if (manualResolution === ResolutionType.FULL_REFUND && selectedClaim.order_amount) {
-        setManualRefundAmount(selectedClaim.order_amount);
-      } else if (manualResolution === ResolutionType.NONE) {
-        setManualRefundAmount(0);
+      switch (manualResolution) {
+        case ResolutionType.FULL_REFUND:
+          // Auto-fill total amount
+          setManualRefundAmount(selectedClaim.order_amount || 0);
+          break;
+        case ResolutionType.NONE:
+        case ResolutionType.REPLACEMENT:
+          // Auto-fill 0 for replacement or rejection
+          setManualRefundAmount(0);
+          break;
+        case ResolutionType.PARTIAL_REFUND:
+          // Clear box for manual entry
+          setManualRefundAmount('');
+          break;
+        default:
+          break;
       }
     }
   }, [manualResolution, isEditing, selectedClaim]);
@@ -87,7 +100,7 @@ export const AdminDashboard: React.FC = () => {
         selectedClaim.claim_id, 
         finalStatus, 
         manualResolution, 
-        (finalStatus === ClaimStatus.APPROVED || finalStatus === ClaimStatus.WAITING_USER_ACTION) ? manualRefundAmount : 0,
+        (finalStatus === ClaimStatus.APPROVED || finalStatus === ClaimStatus.WAITING_USER_ACTION) ? Number(manualRefundAmount) : 0,
         adminNotes
       );
       await loadData(); // Refresh immediately
@@ -111,16 +124,32 @@ export const AdminDashboard: React.FC = () => {
 
   const filteredList = getFilteredClaims();
 
-  // Simple chart logic
-  const CHART_DATA = [
-    { name: 'Mon', claims: 0 },
-    { name: 'Tue', claims: 0 },
-    { name: 'Wed', claims: 0 },
-    { name: 'Thu', claims: 0 },
-    { name: 'Fri', claims: claims.length }, 
-    { name: 'Sat', claims: 0 },
-    { name: 'Sun', claims: 0 },
-  ];
+  // Dynamic Chart Data Generation (Last 7 Days)
+  const generateChartData = () => {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const today = new Date();
+      const data = [];
+      
+      // Go back 6 days + today = 7 days total
+      for (let i = 6; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const dayName = days[d.getDay()];
+          
+          // Filter claims for this specific day
+          const count = claims.filter(c => {
+              const cDate = new Date(c.created_at);
+              return cDate.getDate() === d.getDate() && 
+                     cDate.getMonth() === d.getMonth() && 
+                     cDate.getFullYear() === d.getFullYear();
+          }).length;
+          
+          data.push({ name: dayName, claims: count });
+      }
+      return data;
+  };
+
+  const CHART_DATA = generateChartData();
 
   const Card = ({ title, value, subtext, icon, type, active }: any) => (
     <div 

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { UserInput, MistralDecision, ResolutionType } from '../types';
 import { fetchOrderData, callMistralAgent, saveClaim } from '../services/mockBackend';
@@ -25,17 +26,10 @@ export const ClaimForm: React.FC = () => {
       // 1. Fetch Order Data (Server Side)
       const validationPayload = await fetchOrderData(Number(formData.order_id));
       
-      // 2. Call Mistral Agent (Server Side)
+      // 2. Call Mistral Agent (Server Side) or Fallback
       const decision = await callMistralAgent(formData, validationPayload);
       
-      // 3. Check for System/Capacity Errors
-      if (decision.reason.includes("Service tier capacity exceeded") || 
-          decision.reason.includes("Automated analysis unavailable")) {
-        setSystemError("Our automated validation system is currently experiencing high traffic. Please try again in a few minutes or contact support directly if urgent.");
-        return; // STOP: Do not save to history
-      }
-
-      // 4. Save result to history only if valid analysis
+      // 3. Save result to history
       await saveClaim(formData, decision);
 
       setResult(decision);
